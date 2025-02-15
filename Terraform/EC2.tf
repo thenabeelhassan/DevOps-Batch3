@@ -6,6 +6,8 @@ resource "aws_instance" "ec2_instance" {
     subnet_id              = "subnet-08278f0f1eee4462c"  # Replace with your subnet ID
     vpc_security_group_ids = [ "sg-0587cfd551e03261c" ]
 
+    iam_instance_profile   = "EC2-Access-ECR"
+
     user_data = <<-EOF
             #!/bin/bash
 
