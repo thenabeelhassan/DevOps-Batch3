@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+    
+    environment {
+        APP_NAME = 'portfolio'
+        GITHUB_CREDENTIALS_ID = 'GitHub-DB3'
+        GITHUB_URL = 'https://github.com/thenabeelhassan/DevOps-Batch3'
+    }
+
+    stages {
+        stage("Prerequisites") {
+            steps {
+                script {
+                    echo "Executing 'Prerequisites' stage for ${APP_NAME}"
+                    env.TIMESTAMP = sh(script: "date +%Y%m%d%H%M%S", returnStdout: true).trim()
+                    echo "Generated timestamp: ${env.TIMESTAMP}"
+                    sh "aws ecr get-login-password --region me-south-1 | docker login --username AWS --password-stdin 195853814676.dkr.ecr.me-south-1.amazonaws.com"
+                }
+            }
+        }
+        stage("Checkout") {
+            steps {
+                echo "Executing 'Checkout' stage for ${APP_NAME}"
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        credentialsId: "${GITHUB_CREDENTIALS_ID}",
+                        url: "${GITHUB_URL}"
+                    ]]
+                ])
+            }
+        }
+        stage("Build Docker Image") {
+            steps {
+                echo "Executing 'Build Docker Image' stage for ${APP_NAME}"
+                dir("./Web") {
+                    sh """
+                        docker build -t ${APP_NAME}_image:${env.TIMESTAMP} .
+                        docker tag ${APP_NAME}_image:${env.TIMESTAMP} 195853814676.dkr.ecr.me-south-1.amazonaws.com/corvit/db3:${env.TIMESTAMP}
+                        docker tag ${APP_NAME}_image:${env.TIMESTAMP} 195853814676.dkr.ecr.me-south-1.amazonaws.com/corvit/db3:latest
+                    """
+                }
+            }
+        }
+        stage("Push Docker Image") {
+            steps {
+                echo "Executing 'Push Docker Image' stage for ${APP_NAME}"
+                script {
+                    sh """
+                        docker push 195853814676.dkr.ecr.me-south-1.amazonaws.com/corvit/db3:latest
+                        docker push 195853814676.dkr.ecr.me-south-1.amazonaws.com/corvit/db3:${env.TIMESTAMP}
+                    """
+                }
+            }
+        }
+        stage("Deploy APP EC2") {
+            steps {
+                echo "Executing 'Deploy APP EC2' stage for ${APP_NAME}"
+                dir("./Terraform") {
+                    sh """
+                        terraform init
+                        terraform apply -auto-approve
+                    """
+                }
+            }
+        }
+    }
+}
